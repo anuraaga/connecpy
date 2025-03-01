@@ -8,7 +8,7 @@ import haberdasher_pb2
 server_url = "http://localhost:3000"
 timeout_s = 5
 
-    
+
 def create_large_request():
     """Create a request with a large description to test compression."""
     return haberdasher_pb2.Size(
