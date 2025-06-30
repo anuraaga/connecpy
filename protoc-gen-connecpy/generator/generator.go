@@ -3,43 +3,17 @@ package generator
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
-	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/compiler/protogen"
 )
 
-func Generate(r *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
-	resp := &plugin.CodeGeneratorResponse{}
-	resp.SupportedFeatures = proto.Uint64(uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL))
-
-	files := r.GetFileToGenerate()
-	if len(files) == 0 {
-		resp.Error = proto.String("no files to generate")
-		return resp
-	}
-
-	for _, fileName := range files {
-		fd, err := getFileDescriptor(r.GetProtoFile(), fileName)
-		if err != nil {
-			resp.Error = proto.String("File[" + fileName + "][descriptor]: " + err.Error())
-			return resp
-		}
-
-		connecpyFile, err := GenerateConnecpyFile(fd)
-		if err != nil {
-			resp.Error = proto.String("File[" + fileName + "][generate]: " + err.Error())
-			return resp
-		}
-		resp.File = append(resp.File, connecpyFile)
-	}
-	return resp
-}
-
-func GenerateConnecpyFile(fd *descriptor.FileDescriptorProto) (*plugin.CodeGeneratorResponse_File, error) {
-	name := fd.GetName()
+func GenerateFile(gen *protogen.Plugin, file *protogen.File) (*protogen.GeneratedFile, error) {
+	name := *file.Proto.Name
 
 	fileNameWithoutSuffix := strings.TrimSuffix(name, path.Ext(name))
 	moduleName := strings.Join(strings.Split(fileNameWithoutSuffix, "/"), ".")
@@ -47,27 +21,27 @@ func GenerateConnecpyFile(fd *descriptor.FileDescriptorProto) (*plugin.CodeGener
 	vars := ConnecpyTemplateVariables{
 		FileName:   name,
 		ModuleName: moduleName,
+		Imports:    importStatements(file),
 	}
 
-	svcs := fd.GetService()
-	packageName := fd.GetPackage()
-	for _, svc := range svcs {
+	packageName := *file.Proto.Package
+	for _, svc := range file.Services {
 		connecpySvc := &ConnecpyService{
-			Name:    svc.GetName(),
+			Name:    string(svc.Desc.Name()),
 			Package: packageName,
 		}
 
-		for _, method := range svc.GetMethod() {
-			idempotencyLevel := method.Options.GetIdempotencyLevel()
-			noSideEffects := idempotencyLevel == descriptor.MethodOptions_NO_SIDE_EFFECTS
+		for _, method := range svc.Methods {
+			// idempotencyLevel := method.Desc.Options.GetIdempotencyLevel()
+			noSideEffects := false // idempotencyLevel == descriptor.MethodOptions_NO_SIDE_EFFECTS
 			connecpyMethod := &ConnecpyMethod{
 				Package:               packageName,
 				ServiceName:           connecpySvc.Name,
-				Name:                  method.GetName(),
-				InputType:             getSymbolName(method.GetInputType(), packageName),
-				InputTypeForProtocol:  getSymbolNameForProtocol(method.GetInputType(), packageName),
-				OutputType:            getSymbolName(method.GetOutputType(), packageName),
-				OutputTypeForProtocol: getSymbolNameForProtocol(method.GetOutputType(), packageName),
+				Name:                  string(method.Desc.Name()),
+				InputType:             symbolName(method.Input),
+				InputTypeForProtocol:  symbolName(method.Input),
+				OutputType:            symbolName(method.Output),
+				OutputTypeForProtocol: symbolName(method.Output),
 				NoSideEffects:         noSideEffects,
 			}
 
@@ -82,36 +56,38 @@ func GenerateConnecpyFile(fd *descriptor.FileDescriptorProto) (*plugin.CodeGener
 		return nil, err
 	}
 
-	resp := &plugin.CodeGeneratorResponse_File{
-		Name:    proto.String(strings.TrimSuffix(name, path.Ext(name)) + "_connecpy.py"),
-		Content: proto.String(buf.String()),
+	g := gen.NewGeneratedFile(file.GeneratedFilenamePrefix+"_connecpy.py", file.GoImportPath)
+	g.P(buf.String())
+	return g, nil
+}
+
+// https://github.com/grpc/grpc/blob/0dd1b2cad21d89984f9a1b3c6249d649381eeb65/src/compiler/python_generator_helpers.h#L67
+func moduleName(filename string) string {
+	fn, ok := strings.CutSuffix(filename, ".protodevel")
+	if !ok {
+		fn, _ = strings.CutSuffix(filename, ".proto")
 	}
-
-	return resp, nil
+	fn = strings.ReplaceAll(fn, "-", "_")
+	fn = strings.ReplaceAll(fn, "/", ".")
+	return fn
 }
 
-func getLocalSymbolName(name string) string {
-	parts := strings.Split(name, ".")
-	return "_pb2." + parts[len(parts)-1]
+// https://github.com/grpc/grpc/blob/0dd1b2cad21d89984f9a1b3c6249d649381eeb65/src/compiler/python_generator_helpers.h#L80
+func moduleAlias(filename string) string {
+	mn := moduleName(filename)
+	mn = strings.ReplaceAll(mn, "_", "__")
+	mn = strings.ReplaceAll(mn, ".", "_dot_")
+	return mn
 }
 
-func getSymbolName(name, localPackageName string) string {
-	if strings.HasPrefix(name, "."+localPackageName) {
-		return getLocalSymbolName(name)
-	}
-
-	return "_sym_db.GetSymbol(\"" + name[1:] + "\")"
+func symbolName(msg *protogen.Message) string {
+	msg.Desc.Parent() // Ensure the parent is set
+	packageName := string(msg.Desc.Parent().FullName())
+	name := string(msg.Desc.Name())
+	return fmt.Sprintf("%s.%s", moduleAlias(packageName), name)
 }
 
-func getSymbolNameForProtocol(name, localPackageName string) string {
-	if strings.HasPrefix(name, "."+localPackageName) {
-		return getLocalSymbolName(name)
-	}
-
-	return "Any"
-}
-
-func getFileDescriptor(files []*descriptor.FileDescriptorProto, name string) (*descriptor.FileDescriptorProto, error) {
+func findFileDescriptor(files []*descriptor.FileDescriptorProto, name string) (*descriptor.FileDescriptorProto, error) {
 	//Assumption: Number of files will not be large enough to justify making a map
 	for _, f := range files {
 		if f.GetName() == name {
@@ -119,4 +95,29 @@ func getFileDescriptor(files []*descriptor.FileDescriptorProto, name string) (*d
 		}
 	}
 	return nil, errors.New("could not find descriptor")
+}
+
+func importStatements(file *protogen.File) []ImportStatement {
+	mods := map[string]string{}
+	for _, svc := range file.Services {
+		for _, method := range svc.Methods {
+			method.Input.Desc.Parent()
+			inPkg := string(method.Input.Desc.ParentFile().Package())
+			mods[moduleName(inPkg)] = moduleAlias(inPkg)
+			outPkg := string(method.Output.Desc.ParentFile().Package())
+			mods[moduleName(outPkg)] = moduleAlias(outPkg)
+		}
+	}
+
+	imports := make([]ImportStatement, 0, len(mods))
+	for mod, alias := range mods {
+		imports = append(imports, ImportStatement{
+			Name:  mod,
+			Alias: alias,
+		})
+	}
+	slices.SortFunc(imports, func(a, b ImportStatement) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	return imports
 }

@@ -67,7 +67,7 @@ func TestGenerateConnecpyFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GenerateConnecpyFile(tt.input)
+			got, err := GenerateFile(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateConnecpyFile() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -171,7 +171,7 @@ func TestGetSymbolName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getSymbolName(tt.symbolName, tt.localPackage)
+			got := symbolName(tt.symbolName, tt.localPackage)
 			if got != tt.want {
 				t.Errorf("getSymbolName() = %v, want %v", got, tt.want)
 			}

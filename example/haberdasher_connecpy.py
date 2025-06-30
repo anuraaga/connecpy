@@ -11,12 +11,12 @@ from connecpy.base import Endpoint
 from connecpy.server import ConnecpyServer
 from connecpy.client import ConnecpyClient
 from connecpy.context import ClientContext, ServiceContext
-
-import haberdasher_pb2 as _pb2
+import .i2y.connecpy.example.Hat as _dot_i2y_dot_connecpy_dot_example_dot_Hat
+import .i2y.connecpy.example.Size as _dot_i2y_dot_connecpy_dot_example_dot_Size
 
 
 class Haberdasher(Protocol):
-    async def MakeHat(self, req: _pb2.Size, ctx: ServiceContext) -> _pb2.Hat: ...
+    async def MakeHat(self, req: i2y_dot_connecpy_dot_example.Size, ctx: ServiceContext) -> i2y_dot_connecpy_dot_example.Hat: ...
 
 
 class HaberdasherServer(ConnecpyServer):
@@ -24,12 +24,12 @@ class HaberdasherServer(ConnecpyServer):
         super().__init__()
         self._prefix = f"{server_path_prefix}/i2y.connecpy.example.Haberdasher"
         self._endpoints = {
-            "MakeHat": Endpoint[_pb2.Size, _pb2.Hat](
+            "MakeHat": Endpoint[i2y_dot_connecpy_dot_example.Size, i2y_dot_connecpy_dot_example.Hat](
                 service_name="Haberdasher",
                 name="MakeHat",
                 function=getattr(service, "MakeHat"),
-                input=_pb2.Size,
-                output=_pb2.Hat,
+                input=i2y_dot_connecpy_dot_example.Size,
+                output=i2y_dot_connecpy_dot_example.Hat,
                 allowed_methods=("GET", "POST"),
             ),
         }
@@ -39,7 +39,7 @@ class HaberdasherServer(ConnecpyServer):
 
 
 class HaberdasherSync(Protocol):
-    def MakeHat(self, req: _pb2.Size, ctx: ServiceContext) -> _pb2.Hat: ...
+    def MakeHat(self, req: i2y_dot_connecpy_dot_example.Size, ctx: ServiceContext) -> i2y_dot_connecpy_dot_example.Hat: ...
 
 
 class HaberdasherServerSync(ConnecpyServer):
@@ -47,12 +47,12 @@ class HaberdasherServerSync(ConnecpyServer):
         super().__init__()
         self._prefix = f"{server_path_prefix}/i2y.connecpy.example.Haberdasher"
         self._endpoints = {
-            "MakeHat": Endpoint[_pb2.Size, _pb2.Hat](
+            "MakeHat": Endpoint[i2y_dot_connecpy_dot_example.Size, i2y_dot_connecpy_dot_example.Hat](
                 service_name="Haberdasher",
                 name="MakeHat",
                 function=getattr(service, "MakeHat"),
-                input=_pb2.Size,
-                output=_pb2.Hat,
+                input=i2y_dot_connecpy_dot_example.Size,
+                output=i2y_dot_connecpy_dot_example.Hat,
                 allowed_methods=("GET", "POST"),
             ),
         }
@@ -65,18 +65,18 @@ class HaberdasherClient(ConnecpyClient):
     def MakeHat(
         self,
         *,
-        request: _pb2.Size,
+        request: i2y_dot_connecpy_dot_example.Size,
         ctx: Optional[ClientContext] = None,
         server_path_prefix: str = "",
         use_get: bool = False,
         **kwargs,
-    ) -> _pb2.Hat:
+    ) -> i2y_dot_connecpy_dot_example.Hat:
         method = "GET" if use_get else "POST"
         return self._make_request(
             url=f"{server_path_prefix}/i2y.connecpy.example.Haberdasher/MakeHat",
             ctx=ctx,
             request=request,
-            response_class=_pb2.Hat,
+            response_class=i2y_dot_connecpy_dot_example.Hat,
             method=method,
             **kwargs,
         )
@@ -86,19 +86,19 @@ class AsyncHaberdasherClient(AsyncConnecpyClient):
     async def MakeHat(
         self,
         *,
-        request: _pb2.Size,
+        request: i2y_dot_connecpy_dot_example.Size,
         ctx: Optional[ClientContext] = None,
         server_path_prefix: str = "",
         session: Union[httpx.AsyncClient, None] = None,
         use_get: bool = False,
         **kwargs,
-    ) -> _pb2.Hat:
+    ) -> i2y_dot_connecpy_dot_example.Hat:
         method = "GET" if use_get else "POST"
         return await self._make_request(
             url=f"{server_path_prefix}/i2y.connecpy.example.Haberdasher/MakeHat",
             ctx=ctx,
             request=request,
-            response_class=_pb2.Hat,
+            response_class=i2y_dot_connecpy_dot_example.Hat,
             method=method,
             session=session,
             **kwargs,

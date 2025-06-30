@@ -1,6 +1,6 @@
 // Workspace file to allow running protoc-gen-connecpy from any directory
 // in this repo such as ./example.
 
-go 1.21
+go 1.23.0
 
 use ./protoc-gen-connecpy

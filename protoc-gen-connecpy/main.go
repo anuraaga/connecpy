@@ -1,43 +1,29 @@
 package main
 
 import (
-	"io"
-	"log"
-	"os"
+	"flag"
 
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 	"github.com/i2y/connecpy/protoc-gen-connecpy/generator"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/compiler/protogen"
 )
 
 func main() {
-	data, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		log.Fatalln("could not read from stdin", err)
-		return
-	}
-	var req = &plugin.CodeGeneratorRequest{}
-	err = proto.Unmarshal(data, req)
-	if err != nil {
-		log.Fatalln("could not unmarshal proto", err)
-		return
-	}
-	if len(req.GetFileToGenerate()) == 0 {
-		log.Fatalln("no files to generate")
-		return
-	}
-	resp := generator.Generate(req)
+	flag.Parse()
 
-	if resp == nil {
-		resp = &plugin.CodeGeneratorResponse{}
-	}
+	var flags flag.FlagSet
 
-	data, err = proto.Marshal(resp)
-	if err != nil {
-		log.Fatalln("could not unmarshal response proto", err)
-	}
-	_, err = os.Stdout.Write(data)
-	if err != nil {
-		log.Fatalln("could not write response to stdout", err)
-	}
+	protogen.Options{
+		ParamFunc: flags.Set,
+	}.Run(func(gen *protogen.Plugin) error {
+		gen.SupportedFeatures = uint64(plugin.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+
+		for _, f := range gen.Files {
+			if !f.Generate {
+				continue
+			}
+			generator.GenerateFile(gen, f)
+		}
+		return nil
+	})
 }
