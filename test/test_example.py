@@ -4,12 +4,15 @@ import httpx
 import pytest
 from wsgiref.simple_server import make_server, WSGIServer
 from connecpy.context import ClientContext
+from connecpy.errors import Errors
+from connecpy.exceptions import ConnecpyServerException
 from connecpy.wsgi import ConnecpyWSGIApp
 from example.wsgi_service import HaberdasherService
 from example.haberdasher_pb2 import Size
 from example.haberdasher_connecpy import (
     AsyncHaberdasherClient,
     HaberdasherClient,
+    HaberdasherSync,
     HaberdasherServerSync,
 )
 
@@ -87,3 +90,24 @@ async def test_async_client_custom_session_and_header(sync_server: WSGIServer):
     assert not session.is_closed
     assert recorded_request is not None
     assert recorded_request.headers.get("x-animal") == "bear"
+
+
+def test_service_not_implemented():
+    class EmptyHaberdasherService(HaberdasherSync):
+        pass
+
+    server = HaberdasherServerSync(service=EmptyHaberdasherService())
+    app = ConnecpyWSGIApp()
+    app.add_service(server)
+
+    with make_server("", 0, app) as httpd:
+        thread = threading.Thread(target=httpd.serve_forever)
+        thread.daemon = True
+        thread.start()
+        try:
+            with HaberdasherClient(f"http://localhost:{httpd.server_port}") as client:
+                with pytest.raises(ConnecpyServerException) as exc_info:
+                    client.MakeHat(request=Size(inches=10))
+                assert exc_info.value.code == Errors.Unimplemented
+        finally:
+            httpd.shutdown()

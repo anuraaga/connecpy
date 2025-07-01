@@ -112,7 +112,7 @@ class AsyncConnecpyClient:
             )
         except httpx.HTTPStatusError as e:
             raise exceptions.ConnecpyServerException(
-                code=errors.Errors.Unavailable,
+                code=errors.Errors.from_http_status(e.response.status_code),
                 message=str(e),
             )
         except Exception as e:
